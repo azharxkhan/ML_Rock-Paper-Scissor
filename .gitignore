@@ -4,3 +4,4 @@ venv
 
 #dataset
 data/
+logs/
