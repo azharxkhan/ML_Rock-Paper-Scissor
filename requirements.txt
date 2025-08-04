@@ -2,3 +2,6 @@ tensorflow
 matplotlib 
 numpy
 kagglehub
+scipy
+tkinter
+tensorflow_datasets
