@@ -5,3 +5,4 @@ kagglehub
 scipy
 tkinter
 tensorflow_datasets
+scikit-learn
