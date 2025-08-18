@@ -1,6 +1,7 @@
 tensorflow 
 matplotlib 
 numpy
+pandas
 kagglehub
 scipy
 tkinter
