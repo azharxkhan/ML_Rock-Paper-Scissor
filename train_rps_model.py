@@ -1,131 +1,108 @@
-"""
-Rock-Paper-Scissors Image Classifier with GUI
-Trains a CNN model using image data augmentation, callbacks, and provides
-a simple GUI for inference using a saved model.
-"""
-
 import os
-import datetime
+import random
+import numpy as np
+import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, TensorBoard
-from tensorflow.keras.models import load_model
-from tkinter import filedialog, Tk, Label, Button, PhotoImage
-from PIL import Image, ImageTk
-import numpy as np
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
-# --- Parameters ---
-IMG_HEIGHT = 150
-IMG_WIDTH = 150
-BATCH_SIZE = 32
-dataset_path = "data/kaggle_dataset/rps-cv-images"
-checkpoint_path = "checkpoints/rps_best_model.h5"
-log_dir = "logs/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-EPOCHS = 20
+# ========== Setup ==========
+dataset_path = "/home/wtc/ML_Rock-Paper-Scissor/data/datasets/drgfreeman/rockpaperscissors/versions/2/rps-cv-images"
+model_path = "rps_model.h5"
+img_height, img_width = 150, 150
+batch_size = 32
+epochs = 10
 
-# --- Data Augmentation and Generators ---
-datagen = ImageDataGenerator(
-    rescale=1./255,
-    rotation_range=15,
-    zoom_range=0.1,
-    width_shift_range=0.1,
-    height_shift_range=0.1,
-    horizontal_flip=True,
-    validation_split=0.2
-)
+# ========== Load and Preprocess Data ==========
+datagen = ImageDataGenerator(rescale=1./255, validation_split=0.2)
 
 train_generator = datagen.flow_from_directory(
     dataset_path,
-    target_size=(IMG_HEIGHT, IMG_WIDTH),
-    batch_size=BATCH_SIZE,
+    target_size=(img_height, img_width),
+    batch_size=batch_size,
     class_mode='categorical',
-    subset='training'
+    subset='training',
+    shuffle=True
 )
 
 val_generator = datagen.flow_from_directory(
     dataset_path,
-    target_size=(IMG_HEIGHT, IMG_WIDTH),
-    batch_size=BATCH_SIZE,
+    target_size=(img_height, img_width),
+    batch_size=batch_size,
     class_mode='categorical',
-    subset='validation'
+    subset='validation',
+    shuffle=False   # important for confusion matrix
 )
 
-# --- Model Definition ---
-model = tf.keras.models.Sequential([
-    tf.keras.layers.Input(shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
-    tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
-    tf.keras.layers.MaxPooling2D(2, 2),
-    tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
-    tf.keras.layers.MaxPooling2D(2, 2),
-    tf.keras.layers.Flatten(),
-    tf.keras.layers.Dense(128, activation='relu'),
-    tf.keras.layers.Dropout(0.3),
-    tf.keras.layers.Dense(3, activation='softmax')
+class_indices = train_generator.class_indices
+idx_to_class = {v: k for k, v in class_indices.items()}
+
+# ========== Build Model ==========
+model = Sequential([
+    Conv2D(32, (3, 3), activation='relu', input_shape=(img_height, img_width, 3)),
+    MaxPooling2D(2, 2),
+    Conv2D(64, (3, 3), activation='relu'),
+    MaxPooling2D(2, 2),
+    Conv2D(128, (3, 3), activation='relu'),
+    MaxPooling2D(2, 2),
+    Flatten(),
+    Dense(128, activation='relu'),
+    Dropout(0.5),
+    Dense(3, activation='softmax')
 ])
 
-model.compile(optimizer='adam',
-              loss='categorical_crossentropy',
-              metrics=['accuracy'])
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
-# --- Callbacks ---
+# ========== Train Model ==========
+print("🧠 Training model...")
 callbacks = [
-    EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True),
-    ModelCheckpoint(checkpoint_path, save_best_only=True),
-    TensorBoard(log_dir=log_dir)
+    EarlyStopping(patience=3, restore_best_weights=True),
+    ModelCheckpoint(model_path, save_best_only=True)
 ]
 
-# --- Model Training ---
 history = model.fit(
     train_generator,
-    epochs=EPOCHS,
     validation_data=val_generator,
+    epochs=epochs,
     callbacks=callbacks
 )
 
-# --- Save Final Model ---
-model.save("rps_model_final.h5")
+model.save(model_path)
+print(f"✅ Model saved to {model_path}")
 
-# ========== GUI for Inference ==========
+# ========== Plot Accuracy & Loss ==========
+plt.figure(figsize=(12, 5))
 
-def load_and_predict(image_path):
-    """Load and preprocess the image, then return prediction label."""
-    img = Image.open(image_path).resize((IMG_WIDTH, IMG_HEIGHT))
-    img_array = np.expand_dims(np.array(img) / 255.0, axis=0)
-    prediction = model_loaded.predict(img_array)
-    class_names = list(train_generator.class_indices.keys())
-    return class_names[np.argmax(prediction)]
+# Accuracy
+plt.subplot(1, 2, 1)
+plt.plot(history.history['accuracy'], label='Train Acc')
+plt.plot(history.history['val_accuracy'], label='Val Acc')
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+plt.title("Training & Validation Accuracy")
 
-def open_file():
-    """Open image file and update GUI with prediction."""
-    file_path = filedialog.askopenfilename()
-    if not file_path:
-        return
+# Loss
+plt.subplot(1, 2, 2)
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Val Loss')
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.title("Training & Validation Loss")
 
-    # Load image and show
-    img = Image.open(file_path).resize((200, 200))
-    img_tk = ImageTk.PhotoImage(img)
-    image_label.config(image=img_tk)
-    image_label.image = img_tk
+plt.show()
 
-    # Predict and display result
-    result = load_and_predict(file_path)
-    prediction_label.config(text=f"Prediction: {result}")
+# ========== Confusion Matrix at the End ==========
+val_preds = model.predict(val_generator)
+y_true = val_generator.classes
+y_pred = np.argmax(val_preds, axis=1)
 
-# Load saved model
-model_loaded = load_model("rps_model_final.h5")
-
-# --- GUI Setup ---
-root = Tk()
-root.title("Rock Paper Scissors Classifier")
-root.geometry("400x400")
-
-Label(root, text="Upload an image of Rock, Paper, or Scissors").pack(pady=10)
-Button(root, text="Choose Image", command=open_file).pack(pady=10)
-
-image_label = Label(root)
-image_label.pack()
-
-prediction_label = Label(root, text="", font=("Arial", 14))
-prediction_label.pack(pady=10)
-
-root.mainloop()
+cm = confusion_matrix(y_true, y_pred)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=list(class_indices.keys()))
+disp.plot(cmap="Blues", xticks_rotation=45)
+plt.title("Confusion Matrix - Validation Data")
+plt.show()
