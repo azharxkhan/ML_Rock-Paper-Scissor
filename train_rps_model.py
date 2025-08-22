@@ -4,20 +4,21 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.layers import Dense, Dropout, GlobalAveragePooling2D
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 dataset_path = "/home/wtc/ML_Rock-Paper-Scissor/data/datasets/drgfreeman/rockpaperscissors/versions/2/rps-cv-images"
 model_path = "rps_model.h5"
-img_height, img_width = 150, 150
+img_height, img_width = 224, 224   # MobileNetV2 default size
 batch_size = 32
-epochs = 15
+epochs = 25
 
+# Data augmentation
 datagen = ImageDataGenerator(
     rescale=1./255,
     validation_split=0.2,
-    rotation_range=20,
+    rotation_range=30,
     width_shift_range=0.2,
     height_shift_range=0.2,
     shear_range=0.2,
@@ -46,24 +47,32 @@ val_generator = datagen.flow_from_directory(
 class_indices = train_generator.class_indices
 idx_to_class = {v: k for k, v in class_indices.items()}
 
+# Transfer learning base model
+base_model = tf.keras.applications.MobileNetV2(
+    input_shape=(img_height, img_width, 3),
+    include_top=False,
+    weights="imagenet"
+)
+base_model.trainable = False  # freeze base model
+
+# Build model
 model = Sequential([
-    Conv2D(32, (3, 3), activation="relu", input_shape=(img_height, img_width, 3)),
-    MaxPooling2D(2, 2),
-    Conv2D(64, (3, 3), activation="relu"),
-    MaxPooling2D(2, 2),
-    Conv2D(128, (3, 3), activation="relu"),
-    MaxPooling2D(2, 2),
-    Flatten(),
-    Dense(256, activation="relu"),
-    Dropout(0.5),
+    base_model,
+    GlobalAveragePooling2D(),
+    Dropout(0.4),
+    Dense(128, activation="relu"),
+    Dropout(0.3),
     Dense(3, activation="softmax")
 ])
 
-model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+              loss="categorical_crossentropy",
+              metrics=["accuracy"])
 
 callbacks = [
     EarlyStopping(patience=5, restore_best_weights=True),
-    ModelCheckpoint(model_path, save_best_only=True)
+    ModelCheckpoint(model_path, save_best_only=True),
+    ReduceLROnPlateau(factor=0.3, patience=3, verbose=1)
 ]
 
 history = model.fit(
@@ -76,6 +85,7 @@ history = model.fit(
 model.save(model_path)
 print(f"✅ Model saved to {model_path}")
 
+# Plot training history
 plt.figure(figsize=(12, 5))
 
 plt.subplot(1, 2, 1)
@@ -96,6 +106,7 @@ plt.title("Training & Validation Loss")
 
 plt.show()
 
+# Confusion matrix
 val_preds = model.predict(val_generator)
 y_true = val_generator.classes
 y_pred = np.argmax(val_preds, axis=1)
