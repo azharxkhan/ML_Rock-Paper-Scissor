@@ -32,7 +32,8 @@ train_generator = datagen.flow_from_directory(
     batch_size=batch_size,
     class_mode="categorical",
     subset="training",
-    shuffle=True
+    shuffle=True,
+    interpolation="bilinear"  # avoids cropping distortion
 )
 
 val_generator = datagen.flow_from_directory(
@@ -41,7 +42,8 @@ val_generator = datagen.flow_from_directory(
     batch_size=batch_size,
     class_mode="categorical",
     subset="validation",
-    shuffle=False
+    shuffle=False,
+    interpolation="bilinear"
 )
 
 class_indices = train_generator.class_indices
