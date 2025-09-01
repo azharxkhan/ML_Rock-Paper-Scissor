@@ -33,7 +33,7 @@ train_generator = datagen.flow_from_directory(
     class_mode="categorical",
     subset="training",
     shuffle=True,
-    interpolation="bilinear"  # avoids cropping distortion
+    interpolation="bilinear"  
 )
 
 val_generator = datagen.flow_from_directory(
@@ -55,7 +55,7 @@ base_model = tf.keras.applications.MobileNetV2(
     include_top=False,
     weights="imagenet"
 )
-base_model.trainable = False  # freeze base model
+base_model.trainable = False  
 
 # Build model
 model = Sequential([
